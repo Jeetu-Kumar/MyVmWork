@@ -1,0 +1,44 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v1
+              with:
+                  dotnet-version: 5.0.x
+            - name: Restore dependencies
+              run: dotnet restore
+            - name: Build
+              run: dotnet build --no-restore
+            - name: Test
+              env:
+                DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+              run: dotnet test --no-build --verbosity normal
+    release:
+        if: ${{ github.ref }} == 'refs/heads/main'
+        needs: build
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v1
+        - name: Login to Heroku Container registry
+          env: 
+            HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          run: heroku container:login 
+        - name: Build and push
+          env:
+            HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          run: |
+            heroku container:push -a ${{ secrets.HEROKU_APP_NAME }} web --arg DATABASE_URL=${{ secrets.DATABASE_URL }}
+        - name: Release
+          env:
+            HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          run: heroku container:release -a ${{ secrets.HEROKU_APP_NAME }} web 
